@@ -27,11 +27,37 @@ def load_data(csv):
     return [response_dict, data]
 
 
+"""Split dataset into a subset of folds.
+"""
+
+
+def cross_validation(data, n_folds):
+    cv_data = list()
+    data_copy = list(data)
+    fold_size = int(len(data) / n_folds)
+    for _ in range(n_folds):
+        fold = list()
+        for _ in range(fold_size):
+            # get a random data point
+            i = randrange(len(data_copy))
+            # add it to the fold then remove it from the pool
+            fold.append(data_copy.pop(i))
+        cv_data.append(fold)
+    return cv_data
+
+
 def main():
+    seed(100)
     response_dict, data = load_data("data.csv")
     # either square root or log base 2
-    sqrt_features = sqrt(len(data[0]) - 1)
-    log2_features = log2(len(data[0]) - 1)
+    sqrt_features = int(sqrt(len(data[0]) - 1))
+    log2_features = int(log2(len(data[0]) - 1))
+
+    # Hyperparameters
+    n_folds = 5
+    max_depth = 10
+
+    folds = cross_validation(data, n_folds)
 
 
 if __name__ == "__main__":

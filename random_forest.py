@@ -18,7 +18,7 @@ def load_data(csv):
     for encode, decode in enumerate(unique_resp):
         response_dict[decode] = encode
 
-    # convert dataframe rows into a list of lists
+    # convert dataframe rows into nested lists
     data = list()
     for row in range(len(df)):
         df.iloc[row, -1] = response_dict[df.iloc[row, -1]]  # encode response
@@ -27,11 +27,8 @@ def load_data(csv):
     return [response_dict, data]
 
 
-"""Split dataset into a subset of folds.
-"""
-
-
 def cross_validation(data, n_folds):
+    """Split dataset into a subset of folds."""
     cv_data = list()
     data_copy = list(data)
     fold_size = int(len(data) / n_folds)
@@ -58,6 +55,20 @@ def main():
     max_depth = 10
 
     folds = cross_validation(data, n_folds)
+    for fold in folds:
+        # assign the entire dataset as the training data
+        training_set = list(folds)
+        # remove the testing set from the training set
+        training_set.remove(fold)
+        # flatten the training set
+        training_set = sum(training_set, [])
+
+        testing_set = list()
+        for row in fold:
+            row_copy = list(row)
+            # remove the response variable
+            row_copy.pop()
+            testing_set.append(row_copy)
 
 
 if __name__ == "__main__":

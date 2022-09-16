@@ -28,7 +28,7 @@ def load_data(csv):
 
 
 def cross_validation(data, n_folds):
-    """Split dataset into a subset of folds."""
+    """Split dataset into a subset of folds"""
     cv_data = list()
     data_copy = list(data)
     fold_size = int(len(data) / n_folds)
@@ -43,9 +43,80 @@ def cross_validation(data, n_folds):
     return cv_data
 
 
+def random_forest(
+    training_set,
+    testing_test,
+    max_depth,
+    min_size,
+    sample_size,
+    n_trees,
+    sqrt_features,
+    response_dict,
+):
+    trees = list()
+    for _ in range(n_trees):
+        sample = sample_with_replacement(training_set, sample_size)
+        build_tree(sample, max_depth, min_size, sqrt_features, response_dict)
+
+
+def sample_with_replacement(training_set, sample_size):
+    """Randomly sample the training set with replacement"""
+    sample = list()
+    n_samples = round(len(training_set) * sample_size)
+    for _ in range(n_samples):
+        i = randrange(len(training_set))
+        sample.append(training_set[i])
+    return sample
+
+
+def build_tree(sample, max_depth, min_size, sqrt_features, response_dict):
+    best_gini = 1.0
+    response = list(response_dict.values())
+    features = list()
+    for _ in range(sqrt_features):
+        index = randrange(len(sample[0]) - 1)
+        if index not in features:
+            features.append(index)
+            # [1, 46, 17, 15, 54, 33, 11]
+    for index in features:
+        for subsample in sample:
+            # (index, subsample[index], sample)
+            # split the sample in two
+            left, right = list(), list()
+            for row in sample:
+                if row[index] < subsample[index]:
+                    left.append(row)
+                else:
+                    right.append(row)
+            split_sample = (left, right)
+            gini = gini_impurity(split_sample, response)
+            if gini < best_gini:
+                best_index = index
+                best_subsample = subsample[index]
+                best_gini = gini
+                best_split = split_sample
+    root = {"index": best_index, "subsample": best_subsample, "split": best_split}
+
+
+def gini_impurity(split_sample, response):
+    """Calculate the gini impurity for a randomly split sample"""
+    gini = 0.0
+    for split in split_sample:
+        size = float(len(split))
+        # avoid dividing by zero
+        if size == 0:
+            continue
+        score = 0.0
+        for val in response:
+            p = [row[-1] for row in split].count(val) / size
+            score += p * p
+        gini += (1.0 - score) * (size / float(len(sum(split_sample, []))))
+    return gini
+
+
 def main():
     seed(100)
-    response_dict, data = load_data("data.csv")
+    response_dict, data = load_data("sonar.csv")
     # either square root or log base 2
     sqrt_features = int(sqrt(len(data[0]) - 1))
     log2_features = int(log2(len(data[0]) - 1))
@@ -53,6 +124,9 @@ def main():
     # Hyperparameters
     n_folds = 5
     max_depth = 10
+    min_size = 1
+    sample_size = 1.0
+    n_trees = 1
 
     folds = cross_validation(data, n_folds)
     for fold in folds:
@@ -69,6 +143,17 @@ def main():
             # remove the response variable
             row_copy.pop()
             testing_set.append(row_copy)
+        random_forest(
+            training_set,
+            testing_set,
+            max_depth,
+            min_size,
+            sample_size,
+            n_trees,
+            sqrt_features,
+            response_dict,
+        )
+        break
 
 
 if __name__ == "__main__":

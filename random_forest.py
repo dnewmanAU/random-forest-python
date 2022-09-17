@@ -66,11 +66,11 @@ def gini_impurity(split_sample, response):
     return gini
 
 
-def get_root(sampled_data, sqrt_features, response_dict):
+def get_node(sampled_data, sqrt_features, response_dict):
     """Find the best split (root) for the sampled data"""
     features = list()
     # get a random list of indices from the data
-    for _ in range(sqrt_features):
+    while len(features) < sqrt_features:
         index = randrange(len(sampled_data[0]) - 1)
         if index not in features:
             features.append(index)
@@ -98,8 +98,44 @@ def get_root(sampled_data, sqrt_features, response_dict):
     return root
 
 
+def build_tree(node, max_depth, min_size, sqrt_features, response_dict, depth):
+    def terminal_node(node):
+        outcomes = list()
+        for row in node:
+            outcomes.append(row[-1])
+        return max(set(outcomes), key=outcomes.count)
+
+    left, right = node["split"]
+    del node["split"]
+    # no split
+    if not left or not right:
+        node["left"] = node["right"] = terminal_node(left + right)
+        return
+    # keep branching until max depth is reached
+    if depth >= max_depth:
+        node["left"] = terminal_node(left)
+        node["right"] = terminal_node(right)
+        return
+    # left child
+    if len(left) <= min_size:
+        node["left"] = terminal_node(left)
+    else:
+        node["left"] = get_node(left, sqrt_features, response_dict)
+        build_tree(
+            node["left"], max_depth, min_size, sqrt_features, response_dict, depth + 1
+        )
+    # right child
+    if len(right) <= min_size:
+        node["right"] = terminal_node(right)
+    else:
+        node["right"] = get_node(right, sqrt_features, response_dict)
+        build_tree(
+            node["right"], max_depth, min_size, sqrt_features, response_dict, depth + 1
+        )
+
+
 def main():
-    seed(100)
+    seed(5438)
     response_dict, data = load_data("sonar.csv")
     # either square root or log base 2
     sqrt_features = int(sqrt(len(data[0]) - 1))
@@ -130,7 +166,8 @@ def main():
         trees = list()
         for _ in range(n_trees):
             sampled_data = sample_with_replacement(training_set, sample_size)
-            root = get_root(sampled_data, sqrt_features, response_dict)
+            root = get_node(sampled_data, sqrt_features, response_dict)
+            build_tree(root, max_depth, min_size, sqrt_features, response_dict, depth=1)
         break
 
 

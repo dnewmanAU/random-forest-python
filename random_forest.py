@@ -4,35 +4,31 @@ from math import sqrt, log2
 
 
 def load_data(csv):
+    """Load a csv dataset"""
     # load the csv file into a dataframe
     df = pd.read_csv(csv, header=None)
-
     # get the response column
     response = df.iloc[:, -1].tolist()
-
     # extract the unique response variables
     unique_resp = set(response)
-
     # encode the response variables
     response_dict = dict()
     for encode, decode in enumerate(unique_resp):
         response_dict[decode] = encode
-
     # convert dataframe rows into nested lists
     data = list()
     for row in range(len(df)):
         df.iloc[row, -1] = response_dict[df.iloc[row, -1]]  # encode response
         data.append(df.iloc[row].tolist())
-
     return [response_dict, data]
 
 
-def cross_validation(data, n_folds):
+def cross_validation(data, num_folds):
     """Split dataset into a subset of folds"""
     cv_data = list()
     data_copy = list(data)
-    fold_size = int(len(data) / n_folds)
-    for _ in range(n_folds):
+    fold_size = int(len(data) / num_folds)
+    for _ in range(num_folds):
         fold = list()
         for _ in range(fold_size):
             # get a random data point
@@ -43,59 +39,14 @@ def cross_validation(data, n_folds):
     return cv_data
 
 
-def random_forest(
-    training_set,
-    testing_test,
-    max_depth,
-    min_size,
-    sample_size,
-    n_trees,
-    sqrt_features,
-    response_dict,
-):
-    trees = list()
-    for _ in range(n_trees):
-        sample = sample_with_replacement(training_set, sample_size)
-        build_tree(sample, max_depth, min_size, sqrt_features, response_dict)
-
-
 def sample_with_replacement(training_set, sample_size):
     """Randomly sample the training set with replacement"""
     sample = list()
-    n_samples = round(len(training_set) * sample_size)
-    for _ in range(n_samples):
+    num_samples = round(len(training_set) * sample_size)
+    for _ in range(num_samples):
         i = randrange(len(training_set))
         sample.append(training_set[i])
     return sample
-
-
-def build_tree(sample, max_depth, min_size, sqrt_features, response_dict):
-    best_gini = 1.0
-    response = list(response_dict.values())
-    features = list()
-    for _ in range(sqrt_features):
-        index = randrange(len(sample[0]) - 1)
-        if index not in features:
-            features.append(index)
-            # [1, 46, 17, 15, 54, 33, 11]
-    for index in features:
-        for subsample in sample:
-            # (index, subsample[index], sample)
-            # split the sample in two
-            left, right = list(), list()
-            for row in sample:
-                if row[index] < subsample[index]:
-                    left.append(row)
-                else:
-                    right.append(row)
-            split_sample = (left, right)
-            gini = gini_impurity(split_sample, response)
-            if gini < best_gini:
-                best_index = index
-                best_subsample = subsample[index]
-                best_gini = gini
-                best_split = split_sample
-    root = {"index": best_index, "subsample": best_subsample, "split": best_split}
 
 
 def gini_impurity(split_sample, response):
@@ -107,11 +58,44 @@ def gini_impurity(split_sample, response):
         if size == 0:
             continue
         score = 0.0
+        # calculate the score of the split for each response variable
         for val in response:
             p = [row[-1] for row in split].count(val) / size
             score += p * p
         gini += (1.0 - score) * (size / float(len(sum(split_sample, []))))
     return gini
+
+
+def get_root(sampled_data, sqrt_features, response_dict):
+    """Find the best split (root) for the sampled data"""
+    features = list()
+    # get a random list of indices from the data
+    for _ in range(sqrt_features):
+        index = randrange(len(sampled_data[0]) - 1)
+        if index not in features:
+            features.append(index)
+    response = list(response_dict.values())
+    best_gini = 1.0
+    # get the gini impurity for each
+    for index in features:
+        for sample in sampled_data:
+            # split the sample in two
+            left_sample, right_sample = list(), list()
+            for row in sampled_data:
+                if row[index] < sample[index]:
+                    left_sample.append(row)
+                else:
+                    right_sample.append(row)
+            split_sample = (left_sample, right_sample)
+            gini = gini_impurity(split_sample, response)
+            # the lower the gini, the better the split
+            if gini < best_gini:
+                best_index = index
+                best_sample = sample[index]
+                best_split = split_sample
+                best_gini = gini
+    root = {"index": best_index, "sample": best_sample, "split": best_split}
+    return root
 
 
 def main():
@@ -143,16 +127,10 @@ def main():
             # remove the response variable
             row_copy.pop()
             testing_set.append(row_copy)
-        random_forest(
-            training_set,
-            testing_set,
-            max_depth,
-            min_size,
-            sample_size,
-            n_trees,
-            sqrt_features,
-            response_dict,
-        )
+        trees = list()
+        for _ in range(n_trees):
+            sampled_data = sample_with_replacement(training_set, sample_size)
+            root = get_root(sampled_data, sqrt_features, response_dict)
         break
 
 

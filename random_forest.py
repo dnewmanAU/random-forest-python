@@ -1,6 +1,7 @@
 import pandas as pd
 from random import seed, randrange
 from math import sqrt, log2
+from time import time
 
 
 def load_data(csv):
@@ -66,11 +67,11 @@ def gini_impurity(split_sample, response):
     return gini
 
 
-def get_node(sampled_data, sqrt_features, response_dict):
+def get_node(sampled_data, num_features, response_dict):
     """Find the best split (root) for the sampled data"""
     features = list()
     # get a random list of indices from the data
-    while len(features) < sqrt_features:
+    while len(features) < num_features:
         index = randrange(len(sampled_data[0]) - 1)
         if index not in features:
             features.append(index)
@@ -98,7 +99,7 @@ def get_node(sampled_data, sqrt_features, response_dict):
     return root
 
 
-def build_tree(node, max_depth, min_size, sqrt_features, response_dict, depth):
+def build_tree(node, max_depth, min_size, num_features, response_dict, depth):
     def terminal_node(node):
         outcomes = list()
         for row in node:
@@ -120,35 +121,57 @@ def build_tree(node, max_depth, min_size, sqrt_features, response_dict, depth):
     if len(left) <= min_size:
         node["left"] = terminal_node(left)
     else:
-        node["left"] = get_node(left, sqrt_features, response_dict)
+        node["left"] = get_node(left, num_features, response_dict)
         build_tree(
-            node["left"], max_depth, min_size, sqrt_features, response_dict, depth + 1
+            node["left"], max_depth, min_size, num_features, response_dict, depth + 1
         )
     # right child
     if len(right) <= min_size:
         node["right"] = terminal_node(right)
     else:
-        node["right"] = get_node(right, sqrt_features, response_dict)
+        node["right"] = get_node(right, num_features, response_dict)
         build_tree(
-            node["right"], max_depth, min_size, sqrt_features, response_dict, depth + 1
+            node["right"], max_depth, min_size, num_features, response_dict, depth + 1
         )
 
 
+def bagging(trees, test_row):
+    def predict(node, test_row):
+        # change sample to value
+        if test_row[node["index"]] < node["sample"]:
+            if isinstance(node["left"], dict):
+                return predict(node["left"], test_row)
+            else:
+                return node["left"]
+        else:
+            if isinstance(node["right"], dict):
+                return predict(node["right"], test_row)
+            else:
+                return node["right"]
+
+    predictions = list()
+    for tree in trees:
+        predictions.append(predict(tree, test_row))
+    return max(set(predictions), key=predictions.count)
+
+
 def main():
-    seed(5438)
     response_dict, data = load_data("sonar.csv")
     # either square root or log base 2
-    sqrt_features = int(sqrt(len(data[0]) - 1))
+    # sqrt_features = int(sqrt(len(data[0]) - 1))
     log2_features = int(log2(len(data[0]) - 1))
 
     # Hyperparameters
-    n_folds = 5
-    max_depth = 10
-    min_size = 1
+    num_folds = 8
+    max_depth = 7
+    min_size = 3
     sample_size = 1.0
-    n_trees = 1
+    num_trees = 10
 
-    folds = cross_validation(data, n_folds)
+    start_time = time()
+
+    folds = cross_validation(data, num_folds)
+    accuracy = list()
     for fold in folds:
         # assign the entire dataset as the training data
         training_set = list(folds)
@@ -158,17 +181,36 @@ def main():
         training_set = sum(training_set, [])
 
         testing_set = list()
+        actual_response = list()
         for row in fold:
             row_copy = list(row)
+            actual_response.append(row_copy[-1])
             # remove the response variable
             row_copy.pop()
             testing_set.append(row_copy)
         trees = list()
-        for _ in range(n_trees):
+        for _ in range(num_trees):
             sampled_data = sample_with_replacement(training_set, sample_size)
-            root = get_node(sampled_data, sqrt_features, response_dict)
-            build_tree(root, max_depth, min_size, sqrt_features, response_dict, depth=1)
-        break
+            # get the best root for the sampled data
+            root = get_node(sampled_data, log2_features, response_dict)
+            # build the tree from the root
+            build_tree(root, max_depth, min_size, log2_features, response_dict, depth=1)
+            trees.append(root)
+        predictions = list()
+        for test_row in testing_set:
+            predictions.append(bagging(trees, test_row))
+        correct = 0
+        for i in range(len(actual_response)):
+            if actual_response[i] == predictions[i]:
+                correct += 1
+        accuracy.append(correct / float(len(actual_response)) * 100.0)
+
+    print("Trees: %d" % num_trees)
+    print("Accuracy: %s" % accuracy)
+    print("Mean Accuracy: %.3f%%" % (sum(accuracy) / float(len(accuracy))))
+
+    end_time = time() - start_time
+    print("\nRuntime: " + "{:.2f}".format(end_time) + " seconds")
 
 
 if __name__ == "__main__":
